@@ -14,10 +14,44 @@ namespace CoolChat.Client
             try
             {
                 UdpClient scanClient = new UdpClient(AddressFamily.InterNetwork);
-                await scanClient.SendAsync(Encoding.UTF8.GetBytes("SCAN BY COOL CHAT SERVER"), new IPEndPoint(IPAddress.Broadcast, 7701));
-                var result = await scanClient.ReceiveAsync();
-                var message = Encoding.UTF8.GetString(result.Buffer);
-                if (!message.StartsWith("YES"))
+                scanClient.Client.ReceiveTimeout = 2000;
+
+                UdpReceiveResult result = default;
+                string message = string.Empty;
+
+                try
+                {
+                    for (int i = 1; i <= 5; i++)
+                    {
+                        Console.WriteLine("Scan network for the chat server. Try " + i + ".");
+                        await scanClient.SendAsync(Encoding.UTF8.GetBytes("SCAN BY COOL CHAT SERVER"), new IPEndPoint(IPAddress.Broadcast, 7701));
+                        try
+                        {
+                            IPEndPoint? remoteEndPoint = null;
+                            //result = await scanClient.ReceiveAsync();
+                            var data = scanClient.Receive(ref remoteEndPoint);
+                            result = new UdpReceiveResult(data, remoteEndPoint);
+                            message = Encoding.UTF8.GetString(result.Buffer);
+
+                            Console.WriteLine($"Scan receive message [{message}] from {remoteEndPoint}");
+
+                            if (!message.StartsWith("YES"))
+                            {
+                                Console.WriteLine("Servers not found!");
+                                return;
+                            }
+                            else
+                            {
+                                break;
+                            }
+                        }
+                        catch
+                        {
+                            Console.WriteLine("Servers not found!");
+                        }
+                    }
+                }
+                catch
                 {
                     Console.WriteLine("Servers not found!");
                     return;
@@ -25,8 +59,11 @@ namespace CoolChat.Client
 
                 var port = int.Parse(message.Split(':')[1]);
                 var ip = result.RemoteEndPoint.Address;
+                Console.WriteLine($"Server found at {ip}:{port}");
 
                 tcpClient.Connect(ip, port/*"192.168.1.253", 7700*/);
+
+                Console.WriteLine("Connection established!");
 
                 using var stream = tcpClient.GetStream();
 
